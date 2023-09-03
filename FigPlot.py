@@ -2,7 +2,7 @@ import autograd.numpy as np
 from autograd import elementwise_grad as grad
 from autograd.numpy import sin, cos, pi, sqrt, tan, arctan, arccos, log10, log, exp, sinc
 import matplotlib.pyplot as plt
-from matplotlib import ticker
+from matplotlib import ticker, lines
 from multiprocessing import Pool
 from scipy.integrate import odeint
 from scipy.interpolate import interp1d
@@ -40,7 +40,7 @@ C = 299792458e0 # m/s
 MSUN = 1.988409902147041e30 # kg
 NSMass = 1.4*MSUN # kg
 Mpc = 3.08567758149e22 # Megaparsec, m
-# R = np.array([1.0737e4, 1.174e4, 1.257e4]) # m
+# R = np.array([1.074e4, 1.174e4, 1.257e4]) # m
 R = np.array([1.0737658e4, 1.1742791e4, 1.2589295e4]) # m
 
 plt.rc('text', usetex=True)
@@ -81,14 +81,22 @@ dpdrho = grad(presure) # m^2 / s^2
 
 # function that returns dz/dt
 
+def Getdmdr(r, rho):
+    return 4*pi*r**2*rho
+
 def Getdalphadr(m, r, p):
     res = (G*m/C**2 + 4*pi*G*r**3*p/C**4) / (r*(r-2*G*m/C**2)) #  1 / m
     return res
-def Getdmdr(r, rho):
-    return 4*pi*r**2*rho
 def Getdrhodr(m, r, rho, NSmodel):
     p = presure(rho, NSmodel)
     return -(rho + p/C**2)*Getdalphadr(m, r, p)/(dpdrho(rho, NSmodel)/C**2)
+
+# def Getdalphadr(m, r, p):
+#     res = (G*m/C**2 ) / (r*(r)) #  1 / m
+#     return res
+# def Getdrhodr(m, r, rho, NSmodel):
+#     p = presure(rho, NSmodel)
+#     return -(rho)*Getdalphadr(m, r, p)/(dpdrho(rho, NSmodel)/C**2)
 
 def model(x, r, NSmodel):
     alpha, m, rho = x
@@ -130,21 +138,22 @@ def SolveMetric():
     colors = ['firebrick', 'goldenrod', 'royalblue']   
     
     # solve    
-    N = round(1e4)
-    rmin = 1e-2#1e1   
+    N = round(1e7)
+    rmin = 1e-4#1e1   
     xmin = rmin
     lss = ["-", "--", ":"]
-    xticks = [[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
-    xMajLocator = MajLogLocator(10, 1e-2, 2e4, 7)
-    xMinLogLocator = MinLogLocator(10, 1e-2, 2e4)
-    for NSmodel in range(3):
-    # for NSmodel in [0]:
+    # xticks = [[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
+    xMajLocator = MajLogLocator(10, rmin, 2e4, 10)
+    xMinLogLocator = MinLogLocator(10, rmin, 2e4)
+    # for NSmodel in range(3):
+    for NSmodel in [0]:
         # initial condition
         ini = [-G*NSMass/C**2/R[NSmodel], NSMass, 7.86e3] # 1, kg, kg/m^3
         # print(ini, 2*G*NSMass/C**2)
 
         # rarray = np.linspace(rmin, R[NSmodel], N)       
         rarray = 10**np.linspace(np.log10(rmin), np.log10(R[NSmodel]), N) 
+        # rarray = np.hstack((10**np.linspace(np.log10(rmin), np.log10(0.1), N), 10**np.linspace(np.log10(0.1), np.log10(R[NSmodel]), N)))
         # print(rarray)
     
         # solve ODE
@@ -162,9 +171,9 @@ def SolveMetric():
         m = res[::step, 1][:end]
         rho = res[::step, 2][:end]
         p = presure(rho, NSmodel)
-        np.savetxt("model%dalpha.txt"%NSmodel, np.vstack((r, res[::step, 0], Getdalphadr(m, r, p))).T)
-        np.savetxt("model%dm.txt"%NSmodel, np.vstack((r, m, Getdmdr(r, rho))).T)
-        np.savetxt("model%drho.txt"%NSmodel, np.vstack((r, rho, Getdrhodr(m, r, rho, NSmodel))).T)
+        # np.savetxt("model%dalpha.txt"%NSmodel, np.vstack((r, res[::step, 0], Getdalphadr(m, r, p))).T)
+        # np.savetxt("model%dm.txt"%NSmodel, np.vstack((r, m, Getdmdr(r, rho))).T)
+        # np.savetxt("model%drho.txt"%NSmodel, np.vstack((r, rho, Getdrhodr(m, r, rho, NSmodel))).T)
 
         # print(NSmodel, res[0, 1])
         axes[0, 0].semilogx(r, alpha, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
@@ -188,33 +197,259 @@ def SolveMetric():
     # axes[0, 0].yaxis.set_minor_locator(ticker.MaxNLocator(12))
     axes[0, 0].xaxis.set_major_locator(xMajLocator)
     axes[0, 0].xaxis.set_minor_locator(xMinLogLocator)
-    axes[0, 0].set_xticks(*xticks)
+    # axes[0, 0].set_xticks(*xticks)
     axes[0, 0].set_xlim(xmin, R[NSmodel]) 
     
     axes[0, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
     axes[0, 1].set_ylabel(labels[1], size=size) 
     axes[0, 1].legend(ncol=1, fontsize=legsize)
     axes[0, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 1e24, 4e30, 8))
-    axes[0, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e24, 4e30))
+    # axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 1e24, 4)
     axes[0, 1].xaxis.set_major_locator(xMajLocator)
     axes[0, 1].xaxis.set_minor_locator(xMinLogLocator)
-    axes[0, 1].set_xticks(*xticks)
-    axes[0, 1].set_yticks([1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30], [r"$10^{24}$", "", r"$10^{26}$", "", r"$10^{28}$", "", r"$10^{30}$"])
-    axes[0, 1].set_xlim(xmin, R[NSmodel])          
-    axes[0, 1].set_ylim(1e24, 4e30)
+    # axes[0, 1].set_xticks(*xticks)
+    # axes[0, 1].set_yticks([1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30], [r"$10^{24}$", "", r"$10^{26}$", "", r"$10^{28}$", "", r"$10^{30}$"])
+    # axes[0, 1].set_xlim(xmin, R[NSmodel])          
+    axes[0, 1].set_ylim(1e14, 4e30)
         
     axes[1, 0].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
     axes[1, 0].set_ylabel(labels[2], size=size)
     axes[1, 0].legend(ncol=1, fontsize=legsize)
     axes[1, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 1e16, 1e19, 6))
-    axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e16, 1e19))
+    # axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 1e16, 1e19, 6))
+    # axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e16, 1e19))
+    axes[1, 0].xaxis.set_major_locator(xMajLocator)
+    axes[1, 0].xaxis.set_minor_locator(xMinLogLocator)
+    # axes[1, 0].set_xticks(*xticks)
+    axes[1, 0].set_xlim(xmin, R[NSmodel])     
+    # axes[1, 0].set_ylim(1e16, 1e19)
+    
+    axes[1, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad)
+    axes[1, 1].set_ylabel(labels[3], size=size)
+    axes[1, 1].legend(ncol=1, fontsize=legsize)
+    axes[1, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[1, 1].yaxis.set_major_locator(MajLogLocator(10, 1e31, 4e34, 6))
+    # axes[1, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e31, 4e34))
+    axes[1, 1].xaxis.set_major_locator(xMajLocator)
+    axes[1, 1].xaxis.set_minor_locator(xMinLogLocator)    
+    # axes[1, 1].set_xticks(*xticks)
+    axes[1, 1].set_xlim(xmin, R[NSmodel])     
+    # axes[1, 1].set_ylim(1e31, 4e34)
+
+        
+    # fig.suptitle(r"$ds^2=-e^{2\alpha}dt^2+[1-2Gm/r]^{-1}dr^2+r^2d\Omega^2$")
+    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.95, hspace=0.5, wspace=0.5)
+    plt.show()
+    # fig.savefig("NSMetric.pdf")
+
+# SolveMetric()
+
+    
+def PlotMetric():
+    size = 25
+    legsize=16
+    labelpad = 3
+    # plt.rc('xtick', top=True, labeltop=False, labelsize=16)
+    # plt.rc('ytick', right=True, labelright=False, labelsize=16)
+    fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+    
+    labels = [r'$\alpha$', r'$m[\mathrm{kg}]$', r'$\rho\left[\mathrm{kg/m^3}\right]$', r'$p\left[\mathrm{N/m^2}\right]$']  
+    labels2 = [r'$\frac{d\alpha}{dr}$', r'$\frac{dm}{dr}$', r'$\frac{d\rho}{dr}$', r'$\frac{dp}{dr}$']  
+    # colors = ['firebrick', 'goldenrod', 'royalblue']  
+    colors = ['k', 'k', 'k'] 
+    
+    rmin = 1e-2
+    xmin = rmin
+    lss = ["-", "--", ":"]
+    xticks = [[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
+    # xticks = [[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-6}$", "", r"$10^{-4}$", "", r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
+    xMajLocator = MajLogLocator(10, rmin, 2e4, 10)
+    xMinLogLocator = MinLogLocator(10, rmin, 2e4)
+    for NSmodel in range(3):
+    # for NSmodel in [0]:
+        # initial condition
+        
+        
+        lw = 1
+        
+        alphadata = np.loadtxt("model%dalpha.txt"%NSmodel)
+        mdata = np.loadtxt("model%dm.txt"%NSmodel)
+        rhodata = np.loadtxt("model%drho.txt"%NSmodel)
+        r = alphadata[:, 0]
+        alpha = alphadata[:, 1]
+        m = mdata[:, 1]
+        rho = rhodata[:, 1]
+        p = presure(rho, NSmodel)
+
+        # print(NSmodel, res[0, 1])
+        axes[0, 0].semilogx(r, alpha, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[0, 0].plot(r, Getdalphadr(m, r, p), label=Names[NSmodel]+', ' + labels2[0], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[0, 1].loglog(r, m, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[0, 1].loglog(r, Getdmdr(r, rho), label=Names[NSmodel]+', ' + labels2[1], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[1, 0].loglog(r, rho, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[1, 0].loglog(r, Getdrhodr(m, r, rho, NSmodel), label=Names[NSmodel]+', ' + labels2[2], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[1, 1].loglog(r, p, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[1, 1].loglog(r, dpdrho(rho, NSmodel)*Getdrhodr(m, r, rho, NSmodel), label=Names[NSmodel]+', ' + labels2[3], ls="--", color=colors[NSmodel], lw=lw)
+
+    rtest = np.array([1e-2, 1e4])
+    axes[0, 1].loglog(rtest, 1e18*rtest**3, color='#9467bd', ls="dashdot")
+
+    axes[0, 0].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad)  
+    axes[0, 0].set_ylabel(labels[0], size=size)  
+    # axes[0, 0].legend(ncol=1, fontsize=legsize)
+
+    axes[0, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[0, 0].set_yticks([-0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0], ["-0.6", "", "-0.4", "", "-0.2", "", "0"])
+    # axes[0, 0].yaxis.set_major_locator(ticker.MaxNLocator(3))
+    # axes[0, 0].yaxis.set_minor_locator(ticker.MaxNLocator(12))
+    axes[0, 0].xaxis.set_major_locator(xMajLocator)
+    axes[0, 0].xaxis.set_minor_locator(xMinLogLocator)
+    axes[0, 0].set_xticks(*xticks)
+    axes[0, 0].set_xlim(xmin, R[NSmodel]) 
+    
+    axes[0, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
+    axes[0, 1].set_ylabel(labels[1], size=size) 
+    # axes[0, 1].legend(ncol=1, fontsize=legsize, framealpha=0., borderpad=0.2)
+    axes[0, 1].legend(ncol=3, fontsize=legsize, bbox_to_anchor=(-0.3, 1.2), loc="center")
+    axes[0, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 1e14, 4e30, 4))
+    # axes[0, 1].yaxis.set_minor_locator(MajLogLocator(10, 1e14, 4e30, 9))
+    axes[0, 1].xaxis.set_major_locator(xMajLocator)
+    axes[0, 1].xaxis.set_minor_locator(xMinLogLocator)
+    axes[0, 1].set_xticks(*xticks)
+    axes[0, 1].set_yticks([1e14, 1e16, 1e18, 1e20, 1e22, 1e24, 1e26, 1e28, 1e30], ["", "", r"$10^{18}$", "",  "", r"$10^{24}$", "", "", r"$10^{30}$"])
+    # axes[0, 1].set_xlim(xmin, R[NSmodel])          
+    axes[0, 1].set_ylim(1e14, 4e30)
+    # axes[0, 1].set_ylim(1e6, 4e30)
+        
+    axes[1, 0].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
+    axes[1, 0].set_ylabel(labels[2], size=size)
+    # axes[1, 0].legend(ncol=1, fontsize=legsize)
+    axes[1, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 1e16, 2e18, 6))
+    axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e16, 2e18))
     axes[1, 0].xaxis.set_major_locator(xMajLocator)
     axes[1, 0].xaxis.set_minor_locator(xMinLogLocator)
     axes[1, 0].set_xticks(*xticks)
     axes[1, 0].set_xlim(xmin, R[NSmodel])     
-    axes[1, 0].set_ylim(1e16, 1e19)
+    # axes[1, 0].set_ylim(1e16, 1e19)
+    
+    axes[1, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad)
+    axes[1, 1].set_ylabel(labels[3], size=size)
+    # axes[1, 1].legend(ncol=1, fontsize=legsize)
+    axes[1, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[1, 1].yaxis.set_major_locator(MajLogLocator(10, 1e31, 4e34, 6))
+    axes[1, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e31, 4e34))
+    axes[1, 1].xaxis.set_major_locator(xMajLocator)
+    axes[1, 1].xaxis.set_minor_locator(xMinLogLocator)    
+    axes[1, 1].set_xticks(*xticks)
+    axes[1, 1].set_xlim(xmin, R[NSmodel])     
+    # axes[1, 1].set_ylim(1e31, 4e34)
+
+        
+    # fig.suptitle(r"$ds^2=-e^{2\alpha}dt^2+[1-2Gm/r]^{-1}dr^2+r^2d\Omega^2$")
+    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.9, hspace=0.5, wspace=0.5)
+    # plt.show()
+    fig.savefig("NSMetric.pdf")
+
+# PlotMetric()
+
+
+    
+def PlotNewtonMetric():
+    size = 25
+    legsize=16
+    labelpad = 3
+    # plt.rc('xtick', top=True, labeltop=False, labelsize=16)
+    # plt.rc('ytick', right=True, labelright=False, labelsize=16)
+    fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+    
+    labels = [r'$\alpha$', r'$m[\mathrm{kg}]$', r'$\rho\left[\mathrm{kg/m^3}\right]$', r'$p\left[\mathrm{N/m^2}\right]$']  
+    labels2 = [r'$\frac{d\alpha}{dr}$', r'$\frac{dm}{dr}$', r'$\frac{d\rho}{dr}$', r'$\frac{dp}{dr}$']  
+    # colors = ['firebrick', 'goldenrod', 'royalblue']
+    colors = ['k', 'k', 'k']    
+    
+    rmin = 1e-2
+    xmin = rmin
+    xmax = 1.5e4
+    lss = ["-", "--", ":"]
+    xticks = [[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
+    # xticks = [[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4], [r"$10^{-6}$", "", r"$10^{-4}$", "", r"$10^{-2}$", "", r"$10^{0}$", "",  r"$10^{2}$", "", r"$10^{4}$"]]
+    xMajLocator = MajLogLocator(10, rmin, 2e4, 10)
+    xMinLogLocator = MinLogLocator(10, rmin, 2e4)
+    for NSmodel in range(3):
+    # for NSmodel in [0]:
+        # initial condition
+        
+        
+        lw = 1
+        
+        alphadata = np.loadtxt("Newtonmodel%dalpha.txt"%NSmodel)
+        mdata = np.loadtxt("Newtonmodel%dm.txt"%NSmodel)
+        rhodata = np.loadtxt("Newtonmodel%drho.txt"%NSmodel)
+        r = alphadata[:, 0]
+        alpha = alphadata[:, 1]
+        m = mdata[:, 1]
+        rho = rhodata[:, 1]
+        p = presure(rho, NSmodel)
+
+        # print(NSmodel, res[0, 1])
+        axes[0, 0].semilogx(r, alpha, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[0, 0].plot(r, Getdalphadr(m, r, p), label=Names[NSmodel]+', ' + labels2[0], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[0, 1].loglog(r, m, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[0, 1].loglog(r, Getdmdr(r, rho), label=Names[NSmodel]+', ' + labels2[1], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[1, 0].loglog(r, rho, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[1, 0].loglog(r, Getdrhodr(m, r, rho, NSmodel), label=Names[NSmodel]+', ' + labels2[2], ls="--", color=colors[NSmodel], lw=lw)
+        
+        axes[1, 1].loglog(r, p, label=Names[NSmodel], color=colors[NSmodel], lw=lw, ls=lss[NSmodel])
+        # axes[1, 1].loglog(r, dpdrho(rho, NSmodel)*Getdrhodr(m, r, rho, NSmodel), label=Names[NSmodel]+', ' + labels2[3], ls="--", color=colors[NSmodel], lw=lw)
+
+    rtest = np.array([1e-2, 1e4])
+    axes[0, 1].loglog(rtest, 1e18*rtest**3, color='#9467bd', ls="dashdot")
+
+    axes[0, 0].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad)  
+    axes[0, 0].set_ylabel(labels[0], size=size)  
+    axes[0, 0].legend(ncol=1, fontsize=legsize)
+    axes[0, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[0, 0].set_yticks([-0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0], ["", "-0.6", "", "-0.4", "", "-0.2", "", "0"])
+    # axes[0, 0].yaxis.set_major_locator(ticker.MaxNLocator(3))
+    # axes[0, 0].yaxis.set_minor_locator(ticker.MaxNLocator(12))
+    axes[0, 0].xaxis.set_major_locator(xMajLocator)
+    axes[0, 0].xaxis.set_minor_locator(xMinLogLocator)
+    axes[0, 0].set_xticks(*xticks)
+    axes[0, 0].set_xlim(xmin, xmax) 
+    
+    axes[0, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
+    axes[0, 1].set_ylabel(labels[1], size=size) 
+    # axes[0, 1].legend(ncol=1, fontsize=legsize, framealpha=0., borderpad=0.2)
+    axes[0, 1].legend(ncol=3, fontsize=legsize, bbox_to_anchor=(-0.3, 1.18), loc="center")
+    axes[0, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 1e14, 4e30, 4))
+    # axes[0, 1].yaxis.set_minor_locator(MajLogLocator(10, 1e14, 4e30, 9))
+    axes[0, 1].xaxis.set_major_locator(xMajLocator)
+    axes[0, 1].xaxis.set_minor_locator(xMinLogLocator)
+    axes[0, 1].set_xticks(*xticks)
+    axes[0, 1].set_yticks([1e14, 1e16, 1e18, 1e20, 1e22, 1e24, 1e26, 1e28, 1e30], ["", "", r"$10^{18}$", "",  "", r"$10^{24}$", "", "", r"$10^{30}$"])
+    axes[0, 1].set_xlim(xmin, xmax)          
+    axes[0, 1].set_ylim(1e14, 4e30)
+    # axes[0, 1].set_ylim(1e6, 4e30)
+        
+    axes[1, 0].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad) 
+    axes[1, 0].set_ylabel(labels[2], size=size)
+    axes[1, 0].legend(ncol=1, fontsize=legsize)
+    axes[1, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 1e16, 2e18, 6))
+    axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e16, 2e18))
+    axes[1, 0].xaxis.set_major_locator(xMajLocator)
+    axes[1, 0].xaxis.set_minor_locator(xMinLogLocator)
+    axes[1, 0].set_xticks(*xticks)
+    axes[1, 0].set_xlim(xmin, xmax)     
+    # axes[1, 0].set_ylim(1e16, 1e19)
     
     axes[1, 1].set_xlabel(r'$r[\mathrm{m}]$', size=size, labelpad=labelpad)
     axes[1, 1].set_ylabel(labels[3], size=size)
@@ -225,20 +460,114 @@ def SolveMetric():
     axes[1, 1].xaxis.set_major_locator(xMajLocator)
     axes[1, 1].xaxis.set_minor_locator(xMinLogLocator)    
     axes[1, 1].set_xticks(*xticks)
-    axes[1, 1].set_xlim(xmin, R[NSmodel])     
-    axes[1, 1].set_ylim(1e31, 4e34)
+    axes[1, 1].set_xlim(xmin, xmax)     
+    # axes[1, 1].set_ylim(1e31, 4e34)
 
         
     # fig.suptitle(r"$ds^2=-e^{2\alpha}dt^2+[1-2Gm/r]^{-1}dr^2+r^2d\Omega^2$")
-    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.95, hspace=0.5, wspace=0.5)
+    fig.suptitle("Newton Limit", size=size)
+    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.85, hspace=0.5, wspace=0.5)
     # plt.show()
-    fig.savefig("NSMetric.pdf")
+    fig.savefig("NSNewtonMetric.pdf")
 
-# SolveMetric()
-
+PlotNewtonMetric()
 
 def Evolution():
     fig, axes = plt.subplots(2, 2, figsize=(8, 7))
+    size = 25
+    legsize=16
+    labelpad = 2.5
+    lss = ["-", "--", ":"]
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+    # data = []
+    # data = np.load("OrbitEvolution.npy", allow_pickle=True)
+    
+    mlines = []
+    for model in range(3):
+        # dat = []
+        for i in range(4):
+            # da = data[model, i]
+            mass_magnitude = i+3
+            filename = "Mm%d_orbit_model%d.txt" % (mass_magnitude, model)
+            da = np.loadtxt(filename)
+
+            print(filename, da.shape)
+            # dat.append(da)
+            axes[0, 0].loglog(da[:, 0], da[:, 1], color=colors[i], ls=lss[model], label=(r"$10^{-%d}$"%mass_magnitude) if model == 0 else None)
+            axes[0, 1].loglog(da[:, 1], da[:, 4]/pi, color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
+            axes[0, 1].scatter(da[-1, 1], da[-1, 4]/pi, color=colors[i])
+            axes[1, 0].loglog(da[:, 0], da[:, 2]/MSUN, color=colors[i], ls=lss[model])
+            axes[1, 1].loglog(da[:, 0], da[:, 4]/pi, color=colors[i], ls=lss[model])
+    #     data.append(np.array(dat, dtype=object))
+            if i==0:
+                line = lines.Line2D([], [], color='k', ls=lss[model], label=Names[model])
+                mlines.append(line)
+    rtest = np.array([7000, 13000])
+    axes[0, 1].loglog(rtest, 5e9*rtest**-1.5, color='#9467bd', ls="dashdot")# if model==0 else None)
+    # data = np.array(data)
+    # print(data.shape)
+    # np.save("OrbitEvolution.npy", np.array(data, dtype=object))
+    
+    axes[0, 0].set_ylabel(r"$r[m]$", size=size, labelpad=labelpad)
+    axes[0, 0].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
+    axes[0, 0].yaxis.set_major_locator(MajLogLocator(10, 1e1, 2e4, 5))
+    axes[0, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e1, 2e4))
+    axes[0, 0].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[0, 0].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
+    axes[0, 0].set_xlim(1e-4, 1.5e2)
+    axes[0, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[0, 0].legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
+                      title_fontsize=legsize+5, handlelength=1.4, bbox_to_anchor=(-0.08, -0.12), loc="lower left")#, bbox_to_anchor=(1.25, 1.18), loc="center")
+
+    
+    axes[0, 1].set_ylabel(r"$f_{\textrm{GW}}[\textrm{Hz}]$", size=size, labelpad=labelpad)
+    axes[0, 1].set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    # axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 3e3, 5e3, 7))
+    # axes[0, 1].yaxis.set_minor_locator(MinLogLocator(10, 3e3, 5e3))
+    axes[0, 1].set_ylim(3.5e3, 5e3)
+    axes[0, 1].set_yticks([4e3, 5e3], [4, 5])
+    axes[0, 1].text(1.1e1, 5.1e3, r"$\times10^3$", size=size)
+    # axes[0, 1].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[0, 1].xaxis.set_major_locator(MajLogLocator(10, 1e1, 2e4, 9))
+    axes[0, 1].xaxis.set_minor_locator(MinLogLocator(10, 1e1, 2e4))
+    axes[0, 1].set_xlim(1e-4, 1.5e2)
+    axes[0, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[0, 1].legend(ncol=1, fontsize=legsize)
+    axes[0, 1].legend(handles=mlines, ncol=3, fontsize=legsize, bbox_to_anchor=(-0.3, 1.3), loc="center")
+
+
+    axes[1, 0].set_ylabel(r"$m_D[M_\odot]$", size=size, labelpad=labelpad)
+    axes[1, 0].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
+    axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 8e-7, 3e-2, 6))
+    axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 8e-7, 3e-2))
+    axes[1, 0].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[1, 0].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
+    axes[1, 0].set_xlim(1e-4, 1.5e2)
+    axes[1, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[1, 0].legend(ncol=1, fontsize=legsize)
+
+
+    axes[1, 1].set_ylabel(r"$f_{\textrm{GW}}[\textrm{Hz}]$", size=size, labelpad=labelpad)
+    axes[1, 1].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
+    # axes[1, 1].yaxis.set_major_locator(MajLogLocator(10, 1e4, 2e4))
+    # axes[1, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e4, 2e4))
+    axes[1, 1].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[1, 1].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
+    axes[1, 1].set_xlim(1e-4, 1.5e2)
+    axes[1, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    # axes[1, 1].legend(ncol=1, fontsize=legsize)
+    axes[1, 1].set_ylim(3.5e3, 5e3)
+    axes[1, 1].set_yticks([4e3, 5e3], [4, 5])
+    axes[1, 1].text(1.1e-4, 5.1e3, r"$\times10^3$", size=size)
+    
+    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.88, hspace=0.5, wspace=0.5)
+    # plt.show()
+    fig.savefig("OrbitEvolution.pdf")
+    
+# Evolution()
+
+def Plotfgw():
+    fig, ax = plt.subplots(1, 1, figsize=(8, 7))
     size = 25
     legsize=16
     labelpad = 2.5
@@ -254,75 +583,28 @@ def Evolution():
             mass_magnitude = i+3
             filename = "Mm%d_orbit_model%d.txt" % (mass_magnitude, model)
             da = np.loadtxt(filename)
-            t = da[:, 0]
-            f1 = interp1d(da[:, 0], da[:, 1], fill_value="extrapolate")
-            f2 = interp1d(da[:, 0], da[:, 2]/MSUN, fill_value="extrapolate")
-            f3 = interp1d(da[:, 0], da[:, 3], fill_value="extrapolate")
-            f4 = interp1d(da[:, 0], da[:, 4]/pi, fill_value="extrapolate")
-            def tempf(t):
-                return (f2(t) - 0.01)**2
-            tend = minimize(tempf, t[-1]).x[0]
-            t = np.hstack((t, tend))
+
             print(filename, da.shape)
             # dat.append(da)
-            axes[0, 0].loglog(t, f1(t), color=colors[i], ls=lss[model], label=(r"$10^{-%d}$"%mass_magnitude) if model == 0 else None)
-            axes[0, 1].loglog(t, f3(t), color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
-            axes[1, 0].loglog(t, f2(t), color=colors[i], ls=lss[model])
-            axes[1, 1].loglog(t, f4(t), color=colors[i], ls=lss[model])
+            ax.loglog(da[:, 1], da[:, 4]/pi, color=colors[i], ls=lss[model], label=(r"$10^{-%d}$"%mass_magnitude) if model == 0 else None)
     #     data.append(np.array(dat, dtype=object))
     # data = np.array(data)
     # print(data.shape)
     # np.save("OrbitEvolution.npy", np.array(data, dtype=object))
     
-    axes[0, 0].set_ylabel(r"$r[m]$", size=size, labelpad=labelpad)
-    axes[0, 0].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
-    axes[0, 0].yaxis.set_major_locator(MajLogLocator(10, 1e1, 2e4, 5))
-    axes[0, 0].yaxis.set_minor_locator(MinLogLocator(10, 1e1, 2e4))
-    axes[0, 0].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
-    axes[0, 0].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
-    axes[0, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    axes[0, 0].legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
+    ax.set_ylabel(r"$f_\mathrm{GW[Hz]}$", size=size, labelpad=labelpad)
+    ax.set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    ax.xaxis.set_major_locator(MajLogLocator(10, 1e1, 1e4))
+    ax.xaxis.set_minor_locator(MinLogLocator(10, 1e1, 1e4))
+    ax.set_ylim(3.5e3, 6e3)
+    ax.set_yticks([4e3, 5e3, 6e3], [4, 5, 6])
+    ax.text(1.1e-4, 6.1e3, r"$\times10^3$", size=size)
+    ax.tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    ax.legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
                       title_fontsize=legsize+5, handlelength=1.5, bbox_to_anchor=(-0.08, -0.12), loc="lower left")#, bbox_to_anchor=(1.25, 1.18), loc="center")
+    plt.show()
 
-    
-    axes[0, 1].set_ylabel(r"$\varphi$", size=size, labelpad=labelpad)
-    axes[0, 1].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
-    axes[0, 1].yaxis.set_major_locator(MajLogLocator(10, 1e0, 1e6, 7))
-    axes[0, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e0, 1e6))
-    axes[0, 1].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
-    axes[0, 1].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
-    axes[0, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    # axes[0, 1].legend(ncol=1, fontsize=legsize)
-    axes[0, 1].legend(ncol=3, fontsize=legsize, bbox_to_anchor=(-0.25, 1.18), loc="center")
-
-
-    axes[1, 0].set_ylabel(r"$m_D[M_\odot]$", size=size, labelpad=labelpad)
-    axes[1, 0].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
-    axes[1, 0].yaxis.set_major_locator(MajLogLocator(10, 8e-7, 3e-2, 6))
-    axes[1, 0].yaxis.set_minor_locator(MinLogLocator(10, 8e-7, 3e-2))
-    axes[1, 0].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
-    axes[1, 0].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
-    axes[1, 0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    # axes[1, 0].legend(ncol=1, fontsize=legsize)
-
-
-    axes[1, 1].set_ylabel(r"$f_{\textrm{GW}}[\textrm{Hz}]$", size=size, labelpad=labelpad)
-    axes[1, 1].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
-    # axes[1, 1].yaxis.set_major_locator(MajLogLocator(10, 1e4, 2e4))
-    # axes[1, 1].yaxis.set_minor_locator(MinLogLocator(10, 1e4, 2e4))
-    axes[1, 1].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
-    axes[1, 1].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 1e2))
-    axes[1, 1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    # axes[1, 1].legend(ncol=1, fontsize=legsize)
-    axes[1, 1].set_ylim(3.5e3, 6e3)
-    axes[1, 1].set_yticks([4e3, 5e3, 6e3], [4, 5, 6])
-    axes[1, 1].text(1.1e-4, 6.1e3, r"$\times10^3$", size=size)
-    
-    fig.subplots_adjust(left=0.15, bottom=0.15, right=0.97, top=0.91, hspace=0.5, wspace=0.5)
-    # plt.show()
-    fig.savefig("OrbitEvolution.pdf")
-    
-# Evolution()
+# Plotfgw()
 
 def PlotV():
     fig, ax = plt.subplots(1, 1, figsize=(8, 7))
@@ -370,11 +652,13 @@ def GetAmp(md, r, dl, iota, phi, omega):
     # amp = 4*G*md*MSUN/(dl*C**2)*(G*m/C**3*omega)**(2/3)
     # hp = amp*cos(2*phi)*(1+cos(iota)**2)/2
     # hc = -amp*sin(2*phi)*cos(iota)
+    # return (hp**2+hc**2)**0.5
     amp = 4*G*md*MSUN/(dl*C**2)*(omega*r/C)**2
     return amp*( (0.5*(1+cos(iota)**2))**2 + cos(iota)**2 )**0.5
 
+
 def plotGW(iota, dl):
-    fig, ax = plt.subplots(1, 1, figsize=(8, 7))
+    fig, axes = plt.subplots(2, 1, figsize=(6, 8))
     size = 30
     legsize=20
     labelpad = 2.5
@@ -382,6 +666,8 @@ def plotGW(iota, dl):
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
     # data = []
     # data = np.load("OrbitEvolution.npy", allow_pickle=True)
+
+    mlines = []
     for model in range(3):
         # dat = []
         mrdata = np.loadtxt("model%dm.txt"%model)
@@ -390,36 +676,127 @@ def plotGW(iota, dl):
             # da = data[model, i]
             mass_magnitude = i+3
             filename = "Mm%d_orbit_model%d.txt" % (mass_magnitude, model)
+            print(filename)
             da = np.loadtxt(filename)
             amp = GetAmp(da[:, 2]/MSUN, da[:, 1], dl, iota, da[:, 3], da[:, 4])
             # dat.append(da)
             
-            ax.loglog(da[:, 0], amp, color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
+            axes[0].loglog(da[:, 0], amp, color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
+            axes[1].loglog(da[:, 1], amp, color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
             # dat.append(da)
-
+            if i==0:
+                line = lines.Line2D([], [], color='k', ls=lss[model], label=Names[model])
+                mlines.append(line)
         # data.append(np.array(dat, dtype=object))
     # data = np.array(data)
     # print(data.shape)
-    # np.save("OrbitEvolution.npy", np.array(data, dtype=object))
+    # np.save("OrbitEvolution.npy", np.array(data, dtype=object))\
+
+    rtest = np.array([20, 10000])
+    axes[1].loglog(rtest, 1.5e-26*rtest**0.5, color='#9467bd', ls="dashdot")
+
+    axes[0].set_ylabel(r"$|h|$", size=size, labelpad=labelpad)
+    axes[0].set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
+    axes[0].legend(handles=mlines, ncol=3, fontsize=legsize, bbox_to_anchor=(0.35, 1.15), loc="center")
+    axes[0].yaxis.set_major_locator(MajLogLocator(10, 2e-25, 3e-20, 10))
+    axes[0].yaxis.set_minor_locator(MinLogLocator(10, 2e-25, 3e-20))
+    axes[0].xaxis.set_major_locator(MajLogLocator(10, 1e-4, 2e2, 10))
+    axes[0].set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[0].xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 2e2))
+    axes[0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[0].tick_params(axis='both', which='major', length=5)
+    axes[0].tick_params(axis='both', which='minor', length=3)
     
-    ax.set_ylabel(r"$|h|$", size=size, labelpad=labelpad)
-    ax.set_xlabel(r"$t[s]$", size=size, labelpad=labelpad)
-    ax.legend(ncol=3, fontsize=legsize, bbox_to_anchor=(0.5, 0.95), loc="center")
-    ax.yaxis.set_major_locator(MajLogLocator(10, 1e-24, 3e-20, 10))
-    ax.yaxis.set_minor_locator(MinLogLocator(10, 1e-24, 3e-20))
-    ax.xaxis.set_major_locator(MajLogLocator(10, 1e-4, 2e2, 10))
-    ax.set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
-    ax.xaxis.set_minor_locator(MinLogLocator(10, 1e-4, 2e2))
-    ax.tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
-    ax.tick_params(axis='both', which='major', length=5)
-    ax.tick_params(axis='both', which='minor', length=3)
+    axes[0].text(2e-4, 5e-21, r"$10^{-3}\ M_\odot$", size=size, color=colors[0])
+    axes[0].text(2e-4, 5e-22, r"$10^{-4}\ M_\odot$", size=size, color=colors[1])
+    axes[0].text(2e-4, 5e-23, r"$10^{-5}\ M_\odot$", size=size, color=colors[2])
+    axes[0].text(2e-4, 5e-24, r"$10^{-6}\ M_\odot$", size=size, color=colors[3])
+
+    axes[1].set_ylabel(r"$|h|$", size=size, labelpad=labelpad)
+    axes[1].set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    # axes[1].legend(handles=mlines, ncol=1, fontsize=legsize, framealpha=0.4, columnspacing=1) #, handlelength=2, bbox_to_anchor=(0.5, 0.95), loc="center")
+    axes[1].yaxis.set_major_locator(MajLogLocator(10, 5e-26, 3e-20, 10))
+    axes[1].yaxis.set_minor_locator(MinLogLocator(10, 5e-26, 3e-20))
+    axes[1].xaxis.set_major_locator(MajLogLocator(10, 1e1, 2e4, 10))
+    # ax.set_xticks([1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2], [r"$10^{-4}$", "", r"$10^{-2}$", "",  r"$10^{0}$", "", r"$10^{2}$"])
+    axes[1].xaxis.set_minor_locator(MinLogLocator(10, 1e1, 2e4))
+    axes[1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[1].tick_params(axis='both', which='major', length=5)
+    axes[1].tick_params(axis='both', which='minor', length=3)
     
-    ax.text(2e-4, 4e-21, r"$10^{-3}\ M_\odot$", size=size, color=colors[0])
-    ax.text(2e-3, 4e-22, r"$10^{-4}\ M_\odot$", size=size, color=colors[1])
-    ax.text(2e-2, 4e-23, r"$10^{-5}\ M_\odot$", size=size, color=colors[2])
-    ax.text(2e-1, 4e-24, r"$10^{-6}\ M_\odot$", size=size, color=colors[3])
-    fig.subplots_adjust(left=0.2, bottom=0.17, right=0.97, top=0.97)
+    axes[1].text(3e2, 0.5e-21, r"$10^{-3}\ M_\odot$", size=size, color=colors[0], rotation=12)
+    axes[1].text(3e2, 0.5e-22, r"$10^{-4}\ M_\odot$", size=size, color=colors[1], rotation=12)
+    axes[1].text(3e2, 0.5e-23, r"$10^{-5}\ M_\odot$", size=size, color=colors[2], rotation=12)
+    axes[1].text(3e2, 0.5e-24, r"$10^{-6}\ M_\odot$", size=size, color=colors[3], rotation=12)
+    fig.subplots_adjust(left=0.25, bottom=0.13, right=0.97, top=0.9, hspace=0.4)
     # plt.show()
     fig.savefig("GWAmp.pdf")
 
-plotGW(pi/3, 0.01*Mpc)
+# plotGW(pi/3, 0.01*Mpc)
+
+
+def PlotgwExpon(iota, dl):
+    fig, axes = plt.subplots(3, 1, figsize=(8, 9))
+    size = 25
+    legsize=16
+    labelpad = 2.5
+    lss = ["-", "--", ":"]
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+    # data = []
+    # data = np.load("OrbitEvolution.npy", allow_pickle=True)
+    
+    for model in range(3):
+        # dat = []
+        for i in range(4):
+            # da = data[model, i]
+            mass_magnitude = i+3
+            filename = "Mm%d_orbit_model%d.txt" % (mass_magnitude, model)
+            da = np.loadtxt(filename)
+
+            print(filename, da.shape)
+            # dat.append(da)
+            axes[0].semilogx(da[:-1, 1], np.diff(log10(da[:, 4]/pi))/np.diff(log10(da[:, 1])), color=colors[i], ls=lss[model], label=(r"$10^{-%d}$"%mass_magnitude) if model == 0 else None)
+            axes[1].semilogx(da[:-1, 1], np.diff(log10(da[:, 2]))/np.diff(log10(da[:, 1])), color=colors[i], ls=lss[model], label=(r"$10^{-%d}$"%mass_magnitude) if model == 0 else None)
+            
+            amp = GetAmp(da[:, 2]/MSUN, da[:, 1], dl, iota, da[:, 3], da[:, 4])
+            axes[2].semilogx(da[:-1, 1],  np.diff(log10(amp))/np.diff(log10(da[:, 1])), color=colors[i], ls=lss[model], label=Names[model] if i==0 else None)
+    
+    axes[0].set_ylabel(r"$f_{\mathrm{GW}}[{\mathrm{Hz}}]$", size=size, labelpad=labelpad)
+    axes[0].set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    axes[0].xaxis.set_major_locator(MajLogLocator(10, 1e0, 1.5e4))
+    axes[0].xaxis.set_minor_locator(MinLogLocator(10, 1e0, 1.5e4))
+    # axes[0].set_ylim(3.5e3, 6e3)
+    # axes[0].set_yticks([4e3, 5e3, 6e3], [4, 5, 6])
+    # axes[0].text(1.1e-4, 6.1e3, r"$\times10^3$", size=size)
+    axes[0].set_yticks(-0.3*np.arange(6))
+    axes[0].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[0].legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
+                      title_fontsize=legsize+5, handlelength=1.5, bbox_to_anchor=(0., 0.1), loc="lower left")#, bbox_to_anchor=(1.25, 1.18), loc="center")
+    
+    axes[1].set_ylabel(r"$m_D[M_\odot]$", size=size, labelpad=labelpad)
+    axes[1].set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    axes[1].xaxis.set_major_locator(MajLogLocator(10, 1e0, 1.5e4))
+    axes[1].xaxis.set_minor_locator(MinLogLocator(10, 1e0, 1.5e4))
+    # axes[1].set_ylim(3.5e3, 6e3)
+    # axes[1].set_yticks([4e3, 5e3, 6e3], [4, 5, 6])
+    axes[1].set_yticks(-0.3*np.arange(6))
+    axes[1].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[1].legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
+                      title_fontsize=legsize+5, handlelength=1.5, bbox_to_anchor=(0., -0.1), loc="lower left")#, bbox_to_anchor=(1.25, 1.18), loc="center")
+    
+    axes[2].set_ylabel(r"$|h|$", size=size, labelpad=labelpad)
+    axes[2].set_xlabel(r"$r[m]$", size=size, labelpad=labelpad)
+    axes[2].xaxis.set_major_locator(MajLogLocator(10, 1e0, 1.5e4))
+    axes[2].xaxis.set_minor_locator(MinLogLocator(10, 1e0, 1.5e4))
+    # axes[1].set_ylim(3.5e3, 6e3)
+    # axes[1].set_yticks([4e3, 5e3, 6e3], [4, 5, 6])
+    axes[2].set_yticks(-0.5*np.arange(7)+1.5)
+    axes[2].tick_params(axis='both', which='both', top=True, labeltop=False, right=True, labelright=False, labelsize=size)
+    axes[2].legend(ncol=1, fontsize=legsize+5, title=r"   $m_D[M_\odot]$", labelspacing=0.3, handletextpad=0.5, framealpha=0,
+                      title_fontsize=legsize+5, handlelength=1.5, bbox_to_anchor=(0., 0.25), loc="lower left")#, bbox_to_anchor=(1.25, 1.18), loc="center")
+    fig.subplots_adjust(left=0.15, bottom=0.13, right=0.97, top=0.97, hspace=0.2)
+
+    # plt.show()
+    fig.savefig("GWDeriv.pdf")
+
+# PlotgwExpon(pi/3, 0.01*Mpc)
